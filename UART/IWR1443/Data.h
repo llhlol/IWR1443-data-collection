@@ -13,7 +13,7 @@ struct FrameHeader {
     uint32_t time;
     uint32_t detectedObjectCount;
     uint32_t tlvCount;
-    //uint32_t subframeNumber;
+    // uint32_t subframeNumber;
 };
 
 enum class TLVType : uint32_t {
@@ -39,11 +39,15 @@ struct TLVHeader {
     uint32_t length;
 };
 
+struct DetectedPointHeader {
+    uint16_t detectedObjectCount;
+    uint16_t xyzQFormat;
+};
+
 struct DetectedPoint {
     float x;
     float y;
     float z;
-    float doppler;
 };
 
 struct Q9Real {
@@ -192,16 +196,24 @@ struct std::formatter<iwr1443::TLVType> : std::formatter<std::string_view> {
 };
 
 template <>
+struct std::formatter<iwr1443::DetectedPointHeader> : std::formatter<uint16_t> {
+    template <typename FormatContext>
+    auto format(const iwr1443::DetectedPointHeader &value, FormatContext &ctx) const
+        -> decltype(ctx.out()) {
+        return std::format_to(ctx.out(),
+                              R"({{"detectedObjectCount": {}, "xyzQFormat": {}}})",
+                              value.detectedObjectCount,
+                              value.xyzQFormat);
+    }
+};
+
+template <>
 struct std::formatter<iwr1443::DetectedPoint> : std::formatter<float> {
     template <typename FormatContext>
     auto format(const iwr1443::DetectedPoint &value, FormatContext &ctx) const
         -> decltype(ctx.out()) {
-        return std::format_to(ctx.out(),
-                              R"({{"x": {}, "y": {}, "z": {}, "doppler": {}}})",
-                              value.x,
-                              value.y,
-                              value.z,
-                              value.doppler);
+        return std::format_to(
+            ctx.out(), R"({{"x": {}, "y": {}, "z": {}}})", value.x, value.y, value.z);
     }
 };
 

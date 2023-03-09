@@ -1,4 +1,5 @@
 #include "Serials.h"
+#include "../Log.h"
 #include "Data.h"
 
 #include <Windows.h>
@@ -90,16 +91,20 @@ static auto HandleTLV(std::string &ctx, const void *tlv) noexcept -> size_t {
     std::format_to(std::back_inserter(ctx), "{{\"Type\": \"{}\", ", tlvHeader->type);
     switch (tlvHeader->type) {
     case TLVType::DetectedPoints: {
-        const size_t         pointCount = tlvHeader->length / sizeof(DetectedPoint);
-        const DetectedPoint *points     = static_cast<const DetectedPoint *>(data);
+        std::format_to(std::back_inserter(ctx), "\"Data\": {{");
+        const auto *header = static_cast<const DetectedPointHeader *>(data);
+        std::format_to(std::back_inserter(ctx), "\"Header\": {}, \"Points\": [", *header);
 
-        std::format_to(std::back_inserter(ctx), "\"Data\": [");
+        const size_t pointCount = header->detectedObjectCount;
+        const auto  *points     = reinterpret_cast<const DetectedPoint *>(
+            static_cast<const std::byte *>(data) + sizeof(DetectedPointHeader));
+
         for (size_t i = 0; i < pointCount; ++i) {
             if (i != 0)
                 std::format_to(std::back_inserter(ctx), ", ");
             std::format_to(std::back_inserter(ctx), "{}", points[i]);
         }
-        std::format_to(std::back_inserter(ctx), "]");
+        std::format_to(std::back_inserter(ctx), "]}}");
         break;
     }
 
