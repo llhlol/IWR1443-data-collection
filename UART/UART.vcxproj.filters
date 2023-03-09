@@ -5,6 +5,12 @@
     <ClInclude Include="IAsync.h" />
     <ClInclude Include="IOContext.h" />
     <ClInclude Include="Serial.h" />
+    <ClInclude Include="IWR1443\Serials.h">
+      <Filter>IWR1443</Filter>
+    </ClInclude>
+    <ClInclude Include="IWR1443\Data.h">
+      <Filter>IWR1443</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include=".clang-format" />
@@ -14,5 +20,13 @@
     <ClCompile Include="IOContext.cpp" />
     <ClCompile Include="Serial.cpp" />
     <ClCompile Include="Main.cpp" />
+    <ClCompile Include="IWR1443\Serials.cpp">
+      <Filter>IWR1443</Filter>
+    </ClCompile>
+  </ItemGroup>
+  <ItemGroup>
+    <Filter Include="IWR1443">
+      <UniqueIdentifier>{2862327d-74f3-4d44-800d-9e1bfe430ba8}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
 </Project>

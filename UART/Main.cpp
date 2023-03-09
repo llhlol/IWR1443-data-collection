@@ -1,33 +1,34 @@
 #include "IOContext.h"
+#include "IWR1443/Serials.h"
 #include "Log.h"
-#include "Serial.h"
 
 #include <iostream>
 #include <string>
 
-class ControlSerial final : public Serial {
+using namespace iwr1443;
+
+class FileWriter {
 public:
-    using Serial::Serial;
+    /// @brief
+    ///   Create an null json writer.
+    FileWriter() noexcept;
 
-    auto OnRead(const void *data, size_t size) noexcept -> void override {
-        WriteFile(
-            GetStdHandle(STD_OUTPUT_HANDLE), data, static_cast<DWORD>(size), nullptr, nullptr);
-    }
-};
+    /// @brief
+    ///   Destroy this json writer.
+    ~FileWriter() noexcept;
 
-class DataSerial final : public Serial {
-public:
-    using Serial::Serial;
+    /// @brief
+    ///   Try to open the specified file as output file.
+    auto Open(std::string_view path) noexcept -> std::error_code;
 
-    auto OnRead(const void *data, size_t size) noexcept -> void override {
-        (void)data;
-        std::string msg = std::format("Received {} bytes of data from data serial.\n", size);
-        WriteFile(GetStdHandle(STD_OUTPUT_HANDLE),
-                  msg.data(),
-                  static_cast<DWORD>(msg.size()),
-                  nullptr,
-                  nullptr);
-    }
+    /// @brief
+    ///   Try to append data to the end of file.
+    auto Write(const void *data, size_t size) noexcept -> std::error_code;
+
+private:
+    /// @brief
+    ///   Handle of the json file.
+    HANDLE fileHandle;
 };
 
 auto main() -> int {
@@ -41,16 +42,23 @@ auto main() -> int {
     }
 
     ControlSerial controlSerial;
-    errorCode = controlSerial.Initialize("COM4", 115200);
+    errorCode = controlSerial.Initialize();
     if (errorCode.value() != 0) {
         LogError("Failed to initialize control serial: {}.", errorCode.message());
         return EXIT_FAILURE;
     }
 
     DataSerial dataSerial;
-    errorCode = dataSerial.Initialize("COM3", 921600);
+    errorCode = dataSerial.Initialize();
     if (errorCode.value() != 0) {
         LogError("Failed to initialize data serial: {}.", errorCode.message());
+        return EXIT_FAILURE;
+    }
+
+    FileWriter radarDataWriter;
+    errorCode = radarDataWriter.Open("data.json");
+    if (errorCode.value() != 0) {
+        LogError("Failed to open data file {}: {}.", "data.json", errorCode.message());
         return EXIT_FAILURE;
     }
 
@@ -65,6 +73,10 @@ auto main() -> int {
         LogError("Failed to register data serial to IO context: {}.", errorCode.message());
         return EXIT_FAILURE;
     }
+
+    dataSerial.SetPersistantWriter([&radarDataWriter](const void *data, size_t size) -> void {
+        radarDataWriter.Write(data, size);
+    });
 
     std::jthread task([&ioContext]() -> void { ioContext.Run(); });
 
@@ -83,4 +95,50 @@ auto main() -> int {
     task.join();
 
     return 0;
+}
+
+FileWriter::FileWriter() noexcept : fileHandle(INVALID_HANDLE_VALUE) {}
+
+FileWriter::~FileWriter() noexcept {
+    if (fileHandle != INVALID_HANDLE_VALUE) {
+        CloseHandle(fileHandle);
+        fileHandle = INVALID_HANDLE_VALUE;
+    }
+}
+
+auto FileWriter::Open(std::string_view path) noexcept -> std::error_code {
+    const int count =
+        MultiByteToWideChar(CP_UTF8, 0, path.data(), static_cast<int>(path.size()), nullptr, 0);
+
+    if (count <= 0)
+        return std::error_code(GetLastError(), std::system_category());
+
+    std::wstring widePath;
+    widePath.resize(static_cast<size_t>(count));
+
+    MultiByteToWideChar(
+        CP_UTF8, 0, path.data(), static_cast<int>(path.size()), widePath.data(), count);
+
+    HANDLE newFile = CreateFile(widePath.c_str(),
+                                GENERIC_WRITE,
+                                FILE_SHARE_READ,
+                                nullptr,
+                                CREATE_ALWAYS,
+                                FILE_ATTRIBUTE_NORMAL,
+                                nullptr);
+
+    if (newFile == INVALID_HANDLE_VALUE)
+        return std::error_code(GetLastError(), std::system_category());
+
+    if (fileHandle != INVALID_HANDLE_VALUE)
+        CloseHandle(fileHandle);
+
+    fileHandle = newFile;
+    return std::error_code();
+}
+
+auto FileWriter::Write(const void *data, size_t size) noexcept -> std::error_code {
+    if (!WriteFile(fileHandle, data, static_cast<DWORD>(size), nullptr, nullptr))
+        return std::error_code(GetLastError(), std::system_category());
+    return std::error_code();
 }
